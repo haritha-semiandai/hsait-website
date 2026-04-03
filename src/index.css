@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply m-0 bg-mist text-ink antialiased dark:bg-black dark:text-gray-100;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display tracking-tight;
+  }
+
+  p {
+    @apply leading-relaxed;
+  }
+}
+
+@layer components {
+  .section-shell {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .hero-panel {
+    @apply rounded-3xl border border-slate-200 bg-white px-6 py-10 shadow-sm transition dark:border-gray-700 dark:bg-gray-900 sm:px-10 sm:py-12;
+  }
+
+  .section-kicker {
+    @apply inline-flex items-center gap-2 rounded-full border border-primary/20 bg-sky-50 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/50 dark:text-sky-300;
+  }
+
+  .surface-card {
+    @apply rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition duration-300 hover:border-sky-200 hover:shadow-float dark:border-gray-700 dark:bg-gray-900 dark:hover:border-sky-700;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:focus-visible:ring-sky-900;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-5 py-2.5 font-semibold text-ink transition hover:border-primary hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-sky-500 dark:hover:text-sky-300 dark:focus-visible:ring-sky-900;
+  }
+
+  .input-clean {
+    @apply h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-ink placeholder:text-slate-400 focus:border-primary focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-sky-500;
+  }
+}

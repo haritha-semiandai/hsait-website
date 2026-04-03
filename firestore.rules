@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Core helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Admin authorization - specifically for harithasemiconductorsandaitech@gmail.com
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'harithasemiconductorsandaitech@gmail.com';
+    }
+
+    // User data protection
+    match /users/{uid} {
+      // Admins can read all user summary data to pick for certificates
+      allow read: if isOwner(uid) || isAdmin();
+      
+      // Standard profile write for the user themselves
+      allow create, update: if isOwner(uid);
+      allow delete: if false;
+
+      // User's subcollections (certificates, progress, enrollments)
+      match /{subcollection}/{docId} {
+        // Admins can write specifically to certificates and summary for manual issuance
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    // Course management helpers
+    match /courses/{courseSlug} {
+      allow read: if true;
+      allow write: if isAdmin();
+      
+      match /enrollments/{uid} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+      
+      match /liveClasses/{classId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+        
+        match /feedback/{feedbackId} {
+          allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+          allow read, update, delete: if isAdmin();
+        }
+      }
+    }
+
+    match /courseConfigs/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /notificationSubscriptions/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Newsletter management
+    match /newsletterSubscribers/{subscriberId} {
+      allow create, update: if request.resource.data.email is string;
+      allow read, delete: if isAdmin();
+    }
+
+    // Lead management
+    match /leads/{leadId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Deny everything else unless explicitly permitted
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
