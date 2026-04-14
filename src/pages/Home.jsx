@@ -5,7 +5,7 @@ import { upsertNewsletterSubscription } from '../services/databaseService'
 
 const profileStats = [
   {
-    value: '3+',
+    value: '5+',
     label: 'Ongoing Projects',
     icon: FolderKanban,
   },
