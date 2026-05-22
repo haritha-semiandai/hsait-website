@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import {
   adminSignIn,
   requestPasswordReset,
@@ -16,12 +18,42 @@ export function AuthProvider({ children }) {
   const [isAuthLoading, setIsAuthLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = subscribeToAuthState((nextUser) => {
-      setUser(nextUser)
-      setIsAuthLoading(false)
+    let unsubscribeProfile = null
+    const unsubscribeAuth = subscribeToAuthState((nextUser) => {
+      if (nextUser) {
+        if (unsubscribeProfile) unsubscribeProfile()
+
+        if (db) {
+          unsubscribeProfile = onSnapshot(doc(db, 'users', nextUser.uid), (docSnap) => {
+            const profileData = docSnap.exists() ? docSnap.data() : {}
+            setUser({
+              ...nextUser,
+              ...profileData,
+            })
+            setIsAuthLoading(false)
+          }, (error) => {
+            console.error('Error listening to user profile changes:', error)
+            setUser(nextUser)
+            setIsAuthLoading(false)
+          })
+        } else {
+          setUser(nextUser)
+          setIsAuthLoading(false)
+        }
+      } else {
+        if (unsubscribeProfile) {
+          unsubscribeProfile()
+          unsubscribeProfile = null
+        }
+        setUser(null)
+        setIsAuthLoading(false)
+      }
     })
 
-    return unsubscribe
+    return () => {
+      unsubscribeAuth()
+      if (unsubscribeProfile) unsubscribeProfile()
+    }
   }, [])
 
   const value = useMemo(

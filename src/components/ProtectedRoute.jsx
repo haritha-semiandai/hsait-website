@@ -28,8 +28,11 @@ function ProtectedRoute({ children, adminOnly = false }) {
     return <Navigate to={`${loginPath}?redirect=${encodeURIComponent(redirect)}`} replace />
   }
 
-  // Admin access check specifically for harithasemiconductorsandaitech@gmail.com
-  if (adminOnly && user.email !== 'harithasemiconductorsandaitech@gmail.com') {
+  // Admin access check specifically for super-admin or instructor role
+  const isSuperAdmin = user.email === 'harithasemiconductorsandaitech@gmail.com';
+  const isInstructor = user.role === 'instructor';
+
+  if (adminOnly && !isSuperAdmin && !isInstructor) {
     return <Navigate to="/" replace />
   }
 

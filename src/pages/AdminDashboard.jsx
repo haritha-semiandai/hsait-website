@@ -10,8 +10,10 @@ import {
   updateRecordedLink,
   getLiveClasses,
   getCourseEnrollments,
-  getClassFeedback
+  getClassFeedback,
+  updateUserRole
 } from '../services/databaseService'
+import { useAuth } from '../context/AuthContext'
 import { generatePptxCertificate } from '../services/certificateService'
 import { courses } from '../data/courses'
 import { 
@@ -21,9 +23,19 @@ import {
 } from 'lucide-react'
 
 function AdminDashboard() {
+  const { user } = useAuth()
+  const isSuperAdmin = user?.email === 'harithasemiconductorsandaitech@gmail.com'
+  const isInstructor = user?.role === 'instructor'
+
   const [users, setUsers] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [mode, setMode] = useState('classes') 
+
+  useEffect(() => {
+    if (!isSuperAdmin && !['classes', 'reports'].includes(mode)) {
+      setMode('classes')
+    }
+  }, [isSuperAdmin, mode])
   const [status, setStatus] = useState({ type: '', message: '' })
   
   // Selection state
@@ -195,10 +207,11 @@ function AdminDashboard() {
             {[
               { id: 'classes', icon: Video, label: 'Live Classes' },
               { id: 'reports', icon: GraduationCap, label: 'Enrollments' },
-              { id: 'single', icon: User, label: 'Single Cert' },
-              { id: 'batch', icon: Users, label: 'Batch Certs' },
-              { id: 'notifications', icon: BellRing, label: 'Broadcast' }
-            ].map(tab => (
+              { id: 'single', icon: User, label: 'Single Cert', superOnly: true },
+              { id: 'batch', icon: Users, label: 'Batch Certs', superOnly: true },
+              { id: 'notifications', icon: BellRing, label: 'Broadcast', superOnly: true },
+              { id: 'roles', icon: Layers, label: 'Manage Roles', superOnly: true }
+            ].filter(tab => !tab.superOnly || isSuperAdmin).map(tab => (
               <button key={tab.id} onClick={() => setMode(tab.id)} className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold shadow-sm ${mode === tab.id ? 'bg-primary text-white' : 'bg-white text-ink/70 dark:bg-gray-800'}`}>
                 <tab.icon size={18} /> {tab.label}
               </button>
@@ -400,6 +413,73 @@ function AdminDashboard() {
                  <button className="btn-primary-sky w-full py-4 font-bold bg-sky-500 rounded-xl">Push to {subscriptionsCount} Devices</button>
               </form>
            </div>
+        )}
+
+        {/* Manage Roles Mode */}
+        {mode === 'roles' && isSuperAdmin && (
+          <div className="space-y-8 animate-in fade-in zoom-in-95">
+             <div className="surface-card">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold dark:text-white">Role Management</h3>
+                  <div className="text-xs text-ink/40">Assign course administration and teaching privileges</div>
+                </div>
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left text-sm">
+                      <thead>
+                         <tr className="border-b dark:border-gray-800 text-ink/40 uppercase tracking-widest text-[10px]">
+                            <th className="pb-3 px-2">User Name</th>
+                            <th className="pb-3 px-2">Email Address</th>
+                            <th className="pb-3 px-2">Current Role</th>
+                            <th className="pb-3 px-2 text-right">Actions</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y dark:divide-gray-800">
+                         {users.map(u => {
+                           const currentRole = u.role || 'student'
+                           return (
+                             <tr key={u.id} className="group hover:bg-slate-50 transition-colors dark:hover:bg-gray-800/50">
+                                <td className="py-4 px-2 font-bold dark:text-gray-200">{u.displayName || 'No Name'}</td>
+                                <td className="py-4 px-2 text-ink/60">{u.email}</td>
+                                <td className="py-4 px-2">
+                                  <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold ${currentRole === 'instructor' ? 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300' : 'bg-slate-100 text-slate-700 dark:bg-gray-800 dark:text-gray-300'}`}>
+                                    {currentRole.toUpperCase()}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  {u.email === 'harithasemiconductorsandaitech@gmail.com' ? (
+                                    <span className="text-xs text-ink/40 italic">ROOT SUPER ADMIN</span>
+                                  ) : (
+                                    <select
+                                      value={currentRole}
+                                      onChange={async (e) => {
+                                        const newRole = e.target.value
+                                        setIsLoading(true)
+                                        try {
+                                          await updateUserRole(u.id, newRole)
+                                          // Update local state reactively
+                                          setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, role: newRole } : usr))
+                                          setStatus({ type: 'success', message: `Successfully updated ${u.displayName || u.email}'s role to ${newRole}.` })
+                                        } catch (err) {
+                                          setStatus({ type: 'error', message: err.message })
+                                        } finally {
+                                          setIsLoading(false)
+                                        }
+                                      }}
+                                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs focus:border-primary focus:outline-none dark:border-gray-700 dark:bg-gray-850 dark:text-white"
+                                    >
+                                      <option value="student">Student</option>
+                                      <option value="instructor">Instructor</option>
+                                    </select>
+                                  )}
+                                </td>
+                             </tr>
+                           )
+                         })}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+          </div>
         )}
       </div>
 

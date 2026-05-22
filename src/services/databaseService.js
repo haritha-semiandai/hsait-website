@@ -341,6 +341,19 @@ export async function getAllUsers() {
   }))
 }
 
+export async function updateUserRole(userId, newRole) {
+  ensureDatabaseReady()
+  const userRef = doc(db, 'users', userId)
+  await setDoc(
+    userRef,
+    {
+      role: newRole,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
 export async function issueCertificateToUser({
   userId,
   courseTitle,

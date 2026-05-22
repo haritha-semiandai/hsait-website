@@ -16,19 +16,29 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email == 'harithasemiconductorsandaitech@gmail.com';
     }
 
+    // Instructor authorization - permits instructors and super admins
+    function isInstructor() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor')
+      );
+    }
+
     // User data protection
     match /users/{uid} {
-      // Admins can read all user summary data to pick for certificates
-      allow read: if isOwner(uid) || isAdmin();
+      // Admins and instructors can read all user summary data
+      allow read: if isOwner(uid) || isInstructor();
       
-      // Standard profile write for the user themselves
-      allow create, update: if isOwner(uid);
+      // Standard profile write for the user themselves (cannot elevate role)
+      allow create, update: if (isOwner(uid) && (!('role' in request.resource.data) || request.resource.data.role == (resource == null ? 'student' : (('role' in resource.data) ? resource.data.role : 'student')))) || isAdmin();
       allow delete: if false;
 
       // User's subcollections (certificates, progress, enrollments)
       match /{subcollection}/{docId} {
-        // Admins can write specifically to certificates and summary for manual issuance
-        allow read: if isOwner(uid) || isAdmin();
+        // Admins and instructors can read certificates/progress
+        allow read: if isOwner(uid) || isInstructor();
         allow write: if isOwner(uid) || isAdmin();
       }
     }
@@ -36,47 +46,47 @@ service cloud.firestore {
     // Course management helpers
     match /courses/{courseSlug} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isInstructor();
       
       match /enrollments/{uid} {
-        allow read, write: if isOwner(uid) || isAdmin();
+        allow read, write: if isOwner(uid) || isInstructor();
       }
       
       match /liveClasses/{classId} {
         allow read: if isSignedIn();
-        allow write: if isAdmin();
+        allow write: if isInstructor();
         
         match /feedback/{feedbackId} {
           allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-          allow read, update, delete: if isAdmin();
+          allow read, update, delete: if isInstructor();
         }
       }
     }
 
     match /courseConfigs/{configId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isInstructor();
     }
 
     match /notificationSubscriptions/{uid} {
-      allow read, write: if isOwner(uid) || isAdmin();
+      allow read, write: if isOwner(uid) || isInstructor();
     }
 
     match /notifications/{notifId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isInstructor();
     }
 
     // Newsletter management
     match /newsletterSubscribers/{subscriberId} {
       allow create, update: if request.resource.data.email is string;
-      allow read, delete: if isAdmin();
+      allow read, delete: if isInstructor();
     }
 
     // Lead management
     match /leads/{leadId} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read, update, delete: if isInstructor();
     }
 
     // Deny everything else unless explicitly permitted

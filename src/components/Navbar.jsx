@@ -61,8 +61,10 @@ function Navbar() {
           </button>
           {user ? (
             <>
-              {user.email === 'harithasemiconductorsandaitech@gmail.com' && (
-                <Link to="/admin" className="btn-secondary">Admin Tools</Link>
+              {(user.email === 'harithasemiconductorsandaitech@gmail.com' || user.role === 'instructor') && (
+                <Link to="/admin" className="btn-secondary">
+                  {user.email === 'harithasemiconductorsandaitech@gmail.com' ? 'Admin Tools' : 'Instructor Tools'}
+                </Link>
               )}
               <Link to="/profile" className="btn-primary">My Profile</Link>
               <span className="text-sm font-medium text-ink/70 dark:text-gray-300">
@@ -118,6 +120,11 @@ function Navbar() {
             <div className="mt-3 flex gap-3">
               {user ? (
                 <>
+                  {(user.email === 'harithasemiconductorsandaitech@gmail.com' || user.role === 'instructor') && (
+                    <Link to="/admin" className="btn-secondary flex-1" onClick={() => setIsOpen(false)}>
+                      {user.email === 'harithasemiconductorsandaitech@gmail.com' ? 'Admin' : 'Instructor'}
+                    </Link>
+                  )}
                   <Link to="/profile" className="btn-primary flex-1" onClick={() => setIsOpen(false)}>
                     My Profile
                   </Link>
