@@ -15,7 +15,7 @@ const profileStats = [
     icon: BookOpen,
   },
   {
-    value: '20+',
+    value: '1000+',
     label: 'Students',
     icon: Users,
   },
