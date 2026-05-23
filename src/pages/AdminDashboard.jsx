@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { 
   getAllUsers, 
   issueCertificateToUser, 
-  updateCourseAdminDetails,
-  getCourseAdminConfigs,
   getAllNotificationSubscriptions,
   savePushNotification,
   createLiveClassWithNotifications,
@@ -25,7 +23,6 @@ import {
 function AdminDashboard() {
   const { user } = useAuth()
   const isSuperAdmin = user?.email === 'harithasemiconductorsandaitech@gmail.com'
-  const isInstructor = user?.role === 'instructor'
 
   const [users, setUsers] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -47,14 +44,6 @@ function AdminDashboard() {
     issueDate: new Date().toISOString().split('T')[0],
     regNoPrefix: '', 
     regNo: '', 
-  })
-
-  // Schedule management state
-  const [courseConfigs, setCourseConfigs] = useState({})
-  const [scheduleForm, setScheduleForm] = useState({
-    courseSlug: '',
-    startDate: '',
-    classLink: ''
   })
 
   // Live classes management
@@ -81,13 +70,11 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersList, configs, subs] = await Promise.all([
+        const [usersList, subs] = await Promise.all([
           getAllUsers(),
-          getCourseAdminConfigs(),
           getAllNotificationSubscriptions()
         ])
         setUsers(usersList)
-        setCourseConfigs(configs)
         setSubscriptionsCount(subs.length)
       } catch (err) {
         setStatus({ type: 'error', message: 'Initialization failed: ' + err.message })

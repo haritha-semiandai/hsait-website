@@ -15,7 +15,6 @@ function LearnCourse() {
   const course = getCourseBySlug(slug)
 
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [learningState, setLearningState] = useState({ isEnrolled: false })
   const [liveSessions, setLiveSessions] = useState([])
   
@@ -42,7 +41,7 @@ function LearnCourse() {
         })
       } catch (err) {
         if (isMounted) {
-          setError(err?.message ?? 'Failed to load course state.')
+          console.error(err)
           setIsLoading(false)
         }
       }
