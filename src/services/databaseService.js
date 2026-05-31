@@ -556,3 +556,31 @@ export async function getClassFeedback(courseSlug, classId) {
   const snapshot = await getDocs(q)
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
 }
+
+export async function getDynamicCourses() {
+  ensureDatabaseReady()
+  const snapshot = await getDocs(collection(db, 'courses'))
+  return snapshot.docs
+    .map(doc => ({ slug: doc.id, ...doc.data() }))
+    .filter(c => c.title && c.slug)
+}
+
+export async function fetchCourseBySlug(slug) {
+  ensureDatabaseReady()
+  const docRef = doc(db, 'courses', slug)
+  const docSnap = await getDoc(docRef)
+  if (docSnap.exists()) {
+    return { slug, ...docSnap.data() }
+  }
+  return null
+}
+
+export async function saveDynamicCourse(course) {
+  if (!course?.slug) throw new Error('Course slug is required.')
+  ensureDatabaseReady()
+  const docRef = doc(db, 'courses', course.slug)
+  await setDoc(docRef, {
+    ...course,
+    updatedAt: serverTimestamp()
+  }, { merge: true })
+}

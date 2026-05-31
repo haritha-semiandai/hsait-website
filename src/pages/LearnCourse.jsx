@@ -6,13 +6,16 @@ import { getCourseBySlug } from '../data/courses'
 import { 
   getUserCourseLearningState, 
   subscribeToLiveClasses,
-  submitClassFeedback 
+  submitClassFeedback,
+  fetchCourseBySlug
 } from '../services/databaseService'
 
 function LearnCourse() {
   const { slug } = useParams()
   const { user } = useAuth()
-  const course = getCourseBySlug(slug)
+  const isInstructor = user?.role === 'instructor' || user?.email === 'harithasemiconductorsandaitech@gmail.com'
+  const [course, setCourse] = useState(null)
+  const [isLoadingCourse, setIsLoadingCourse] = useState(true)
 
   const [isLoading, setIsLoading] = useState(true)
   const [learningState, setLearningState] = useState({ isEnrolled: false })
@@ -28,14 +31,35 @@ function LearnCourse() {
     let unsubscribeClasses = null
 
     const initializeDashboard = async () => {
-      if (!user?.uid || !course?.slug) return
+      if (!user?.uid) return
+      setIsLoadingCourse(true)
+      
+      let currentCourse = null
+      try {
+        const fetched = await fetchCourseBySlug(slug)
+        if (fetched) {
+          currentCourse = fetched
+        } else {
+          currentCourse = getCourseBySlug(slug)
+        }
+      } catch (err) {
+        console.error('Error fetching course:', err)
+        currentCourse = getCourseBySlug(slug)
+      }
+
+      if (!isMounted) return
+      setCourse(currentCourse)
+      setIsLoadingCourse(false)
+
+      if (!currentCourse?.slug) return
+
       setIsLoading(true)
       try {
-        const prog = await getUserCourseLearningState(user.uid, course)
+        const prog = await getUserCourseLearningState(user.uid, currentCourse)
         if (isMounted) setLearningState(prog)
         
         // Start live class subscription
-        unsubscribeClasses = subscribeToLiveClasses(course.slug, (sessions) => {
+        unsubscribeClasses = subscribeToLiveClasses(currentCourse.slug, (sessions) => {
           if (isMounted) setLiveSessions(sessions)
           setIsLoading(false) // Ready once sessions load
         })
@@ -53,7 +77,7 @@ function LearnCourse() {
       isMounted = false
       if (unsubscribeClasses) unsubscribeClasses()
     }
-  }, [user?.uid, course])
+  }, [user?.uid, slug])
 
   const handleFeedbackSubmit = async (e) => {
     e.preventDefault()
@@ -77,6 +101,14 @@ function LearnCourse() {
     }
   }
 
+  if (isLoadingCourse) {
+    return (
+      <div className="section-shell py-16 flex items-center justify-center gap-3 text-ink/60 dark:text-gray-400">
+        <Loader2 size={24} className="animate-spin text-primary" /> Syncing Dashboard...
+      </div>
+    )
+  }
+
   if (!course) return <Navigate to="/courses" replace />
 
   if (isLoading) {
@@ -87,7 +119,7 @@ function LearnCourse() {
     )
   }
 
-  if (!learningState.isEnrolled) {
+  if (!learningState.isEnrolled && !isInstructor) {
     return (
       <div className="section-shell py-20 text-center mx-auto max-w-xl">
         <h1 className="text-3xl font-bold dark:text-white">Access Denied</h1>

@@ -3,13 +3,16 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getCourseBySlug } from '../data/courses'
-import { enrollUserInCourse, isUserEnrolledInCourse, subscribeToCourseConfigs, subscribeToNotifications } from '../services/databaseService'
+import { enrollUserInCourse, isUserEnrolledInCourse, subscribeToCourseConfigs, subscribeToNotifications, fetchCourseBySlug } from '../services/databaseService'
 
 function CourseDetails() {
   const navigate = useNavigate()
   const { slug } = useParams()
   const { user } = useAuth()
-  const course = getCourseBySlug(slug)
+  const isInstructor = user?.role === 'instructor' || user?.email === 'harithasemiconductorsandaitech@gmail.com'
+  
+  const [course, setCourse] = useState(null)
+  const [isLoadingCourse, setIsLoadingCourse] = useState(true)
   const [isEnrolling, setIsEnrolling] = useState(false)
   const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false)
   const [enrollmentMessage, setEnrollmentMessage] = useState('')
@@ -22,18 +25,39 @@ function CourseDetails() {
     let unsubscribe = null
 
     const initializeData = async () => {
-      // 1. Subscription to admin configs (start date, links)
+      setIsLoadingCourse(true)
+      let currentCourse = null
+      try {
+        const fetched = await fetchCourseBySlug(slug)
+        if (fetched) {
+          currentCourse = fetched
+        } else {
+          currentCourse = getCourseBySlug(slug)
+        }
+      } catch (err) {
+        console.error('Error fetching course:', err)
+        currentCourse = getCourseBySlug(slug)
+      }
+
+      if (!isMounted) return
+
+      setCourse(currentCourse)
+      setIsLoadingCourse(false)
+
+      if (!currentCourse) return
+
+      // 2. Subscription to admin configs (start date, links)
       unsubscribe = subscribeToCourseConfigs((configs) => {
         if (isMounted) setCourseConfig(configs[slug] || null)
       })
 
-      if (!user?.uid || !course?.slug) {
-        if (isMounted) setIsAlreadyEnrolled(false)
+      if (!user?.uid) {
+        setIsAlreadyEnrolled(false)
         return
       }
 
       try {
-        const enrolled = await isUserEnrolledInCourse(user.uid, course.slug)
+        const enrolled = await isUserEnrolledInCourse(user.uid, currentCourse.slug)
         if (isMounted) setIsAlreadyEnrolled(enrolled)
       } catch {
         if (isMounted) setIsAlreadyEnrolled(false)
@@ -46,11 +70,16 @@ function CourseDetails() {
       isMounted = false
       if (unsubscribe) unsubscribe()
     }
-  }, [user?.uid, course?.slug, slug])
+  }, [user?.uid, slug])
 
   const handleEnroll = async () => {
     if (!user) {
       navigate(`/signin?redirect=${encodeURIComponent(`/courses/${course.slug}`)}`)
+      return
+    }
+
+    if (isInstructor) {
+      setEnrollmentMessage('Instructors are not permitted to enroll in courses.')
       return
     }
 
@@ -96,6 +125,14 @@ function CourseDetails() {
     }
   }
 
+  if (isLoadingCourse) {
+    return (
+      <div className="section-shell py-16 flex items-center justify-center gap-3 text-ink/60 dark:text-gray-400">
+        <Loader2 size={24} className="animate-spin text-primary" /> Loading course details...
+      </div>
+    )
+  }
+
   if (!course) {
     return <Navigate to="/courses" replace />
   }
@@ -131,6 +168,14 @@ function CourseDetails() {
                     Enter Class Dashboard <ExternalLink size={16} />
                   </Link>
                 </>
+              ) : isInstructor ? (
+                <button
+                  type="button"
+                  className="btn-secondary cursor-not-allowed opacity-60"
+                  disabled
+                >
+                  Instructors cannot enroll
+                </button>
               ) : (
                 <button
                   type="button"
@@ -142,6 +187,14 @@ function CourseDetails() {
                 </button>
               )}
               <Link to="/courses" className="btn-secondary">Back to Courses</Link>
+              {isInstructor && (
+                <Link
+                  to="/admin"
+                  className="btn-secondary inline-flex items-center gap-1.5"
+                >
+                  <Award size={14} /> Manage This Course
+                </Link>
+              )}
             </div>
 
             {enrollmentMessage && (

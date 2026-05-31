@@ -19,6 +19,7 @@ function formatDate(dateValue) {
 
 function Profile() {
   const { user } = useAuth()
+  const isInstructor = user?.role === 'instructor' || user?.email === 'harithasemiconductorsandaitech@gmail.com'
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [profileData, setProfileData] = useState({
@@ -119,6 +120,14 @@ function Profile() {
           >
             <Bell size={16} /> Enable Course Notifications
           </button>
+          {isInstructor && (
+            <Link
+              to="/admin"
+              className="inline-flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm font-bold text-accent hover:bg-accent/10 dark:border-sky-400/20 dark:bg-sky-400/5 dark:text-sky-400 transition-colors"
+            >
+              <Award size={16} /> Instructor Console (Manage Courses)
+            </Link>
+          )}
         </div>
       </section>
 

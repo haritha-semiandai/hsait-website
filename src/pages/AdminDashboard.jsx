@@ -9,7 +9,9 @@ import {
   getLiveClasses,
   getCourseEnrollments,
   getClassFeedback,
-  updateUserRole
+  updateUserRole,
+  getDynamicCourses,
+  saveDynamicCourse
 } from '../services/databaseService'
 import { useAuth } from '../context/AuthContext'
 import { generatePptxCertificate } from '../services/certificateService'
@@ -17,7 +19,8 @@ import { courses } from '../data/courses'
 import { 
   Loader2, CheckCircle2, AlertCircle, Users, User, Clock, 
   FileDown, Layers, Send, Calendar, Video, BellRing, Info, 
-  Plus, History, ExternalLink, Play, GraduationCap, Star, MessageSquare, X, Check
+  Plus, History, ExternalLink, Play, GraduationCap, Star, MessageSquare, X, Check,
+  BookOpen, Trash2
 } from 'lucide-react'
 
 function AdminDashboard() {
@@ -26,14 +29,36 @@ function AdminDashboard() {
 
   const [users, setUsers] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [mode, setMode] = useState('classes') 
+  const [mode, setMode] = useState('courses') 
 
   useEffect(() => {
-    if (!isSuperAdmin && !['classes', 'reports'].includes(mode)) {
-      setMode('classes')
+    if (!isSuperAdmin && !['classes', 'reports', 'courses'].includes(mode)) {
+      setMode('courses')
     }
   }, [isSuperAdmin, mode])
   const [status, setStatus] = useState({ type: '', message: '' })
+
+  // Course Builder state
+  const [dynamicCourses, setDynamicCourses] = useState([])
+  const [allCourses, setAllCourses] = useState(courses)
+  const [courseForm, setCourseForm] = useState({
+    slug: '',
+    title: '',
+    instructor: '',
+    rating: 4.8,
+    duration: '',
+    estimatedHours: 30,
+    price: 'Contact for details',
+    difficulty: 'Beginner',
+    category: 'AI',
+    image: '',
+    description: '',
+    learningOutcomes: [''],
+    curriculum: [''],
+    certificateName: ''
+  })
+  const [isEditingCourse, setIsEditingCourse] = useState(false)
+  const [editingCourseSlug, setEditingCourseSlug] = useState(null)
   
   // Selection state
   const [selectedUserIds, setSelectedUserIds] = useState([])
@@ -70,12 +95,38 @@ function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersList, subs] = await Promise.all([
-          getAllUsers(),
-          getAllNotificationSubscriptions()
-        ])
+        let usersList = []
+        let subsList = []
+        let dynList = []
+
+        if (isSuperAdmin) {
+          const [uList, sList, dList] = await Promise.all([
+            getAllUsers(),
+            getAllNotificationSubscriptions(),
+            getDynamicCourses()
+          ])
+          usersList = uList
+          subsList = sList
+          dynList = dList
+        } else {
+          dynList = await getDynamicCourses()
+        }
+
         setUsers(usersList)
-        setSubscriptionsCount(subs.length)
+        setSubscriptionsCount(subsList.length)
+        setDynamicCourses(dynList)
+        
+        // Merge dynamic and static courses
+        const merged = [...courses]
+        dynList.forEach(dyn => {
+          const idx = merged.findIndex(c => c.slug === dyn.slug)
+          if (idx > -1) {
+            merged[idx] = { ...merged[idx], ...dyn }
+          } else {
+            merged.push(dyn)
+          }
+        })
+        setAllCourses(merged)
       } catch (err) {
         setStatus({ type: 'error', message: 'Initialization failed: ' + err.message })
       } finally {
@@ -83,7 +134,7 @@ function AdminDashboard() {
       }
     }
     fetchData()
-  }, [])
+  }, [isSuperAdmin])
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -169,7 +220,7 @@ function AdminDashboard() {
     if (!formData.courseSlug) return setStatus({ type: 'error', message: 'Select course.' })
     setIsLoading(true)
     try {
-      const selectedCourse = courses.find(c => c.slug === formData.courseSlug)
+      const selectedCourse = allCourses.find(c => c.slug === formData.courseSlug)
       const targetUsers = users.filter(u => selectedUserIds.includes(u.id))
       for (let i = 0; i < targetUsers.length; i++) {
         const user = targetUsers[i]
@@ -182,6 +233,144 @@ function AdminDashboard() {
     } catch (err) { setStatus({ type: 'error', message: err.message }) }
     finally { setIsLoading(false) }
   }
+  // --- Course Builder Logic ---
+  const handleSaveCourse = async (e) => {
+    e.preventDefault()
+    if (!courseForm.title || !courseForm.slug) {
+      setStatus({ type: 'error', message: 'Title and Slug are required.' })
+      return
+    }
+    
+    setIsLoading(true)
+    try {
+      // Clean outcomes and curriculum arrays of empty values
+      const cleanedForm = {
+        ...courseForm,
+        learningOutcomes: courseForm.learningOutcomes.filter(o => o.trim() !== ''),
+        curriculum: courseForm.curriculum.filter(c => c.trim() !== ''),
+        estimatedHours: Number(courseForm.estimatedHours) || 0,
+        rating: Number(courseForm.rating) || 4.8
+      }
+      
+      await saveDynamicCourse(cleanedForm)
+      setStatus({ type: 'success', message: `Course "${courseForm.title}" saved successfully!` })
+      
+      // Reload dynamic courses
+      const list = await getDynamicCourses()
+      setDynamicCourses(list)
+      
+      // Update merged courses list
+      const merged = [...courses]
+      list.forEach(dyn => {
+        const idx = merged.findIndex(c => c.slug === dyn.slug)
+        if (idx > -1) {
+          merged[idx] = { ...merged[idx], ...dyn }
+        } else {
+          merged.push(dyn)
+        }
+      })
+      setAllCourses(merged)
+      setIsEditingCourse(false)
+      setEditingCourseSlug(null)
+    } catch (err) {
+      setStatus({ type: 'error', message: 'Failed to save course: ' + err.message })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleEditCourseClick = (courseItem) => {
+    setCourseForm({
+      slug: courseItem.slug || '',
+      title: courseItem.title || '',
+      instructor: courseItem.instructor || '',
+      rating: courseItem.rating || 4.8,
+      duration: courseItem.duration || '',
+      estimatedHours: courseItem.estimatedHours || 30,
+      price: courseItem.price || 'Contact for details',
+      difficulty: courseItem.difficulty || 'Beginner',
+      category: courseItem.category || 'AI',
+      image: courseItem.image || '',
+      description: courseItem.description || '',
+      learningOutcomes: courseItem.learningOutcomes?.length ? [...courseItem.learningOutcomes] : [''],
+      curriculum: courseItem.curriculum?.length ? [...courseItem.curriculum] : [''],
+      certificateName: courseItem.certificateName || ''
+    })
+    setEditingCourseSlug(courseItem.slug)
+    setIsEditingCourse(true)
+  }
+
+  const handleAddCourseClick = () => {
+    setCourseForm({
+      slug: '',
+      title: '',
+      instructor: '',
+      rating: 4.8,
+      duration: '',
+      estimatedHours: 30,
+      price: 'Contact for details',
+      difficulty: 'Beginner',
+      category: 'AI',
+      image: '',
+      description: '',
+      learningOutcomes: [''],
+      curriculum: [''],
+      certificateName: ''
+    })
+    setEditingCourseSlug(null)
+    setIsEditingCourse(true)
+  }
+
+  const handleCourseFormChange = (e) => {
+    const { name, value } = e.target
+    setCourseForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  // Update dynamic outcome fields
+  const handleOutcomeChange = (index, value) => {
+    setCourseForm(prev => {
+      const outcomes = [...prev.learningOutcomes]
+      outcomes[index] = value
+      return { ...prev, learningOutcomes: outcomes }
+    })
+  }
+
+  const addOutcomeField = () => {
+    setCourseForm(prev => ({
+      ...prev,
+      learningOutcomes: [...prev.learningOutcomes, '']
+    }))
+  }
+
+  const removeOutcomeField = (index) => {
+    setCourseForm(prev => {
+      const outcomes = prev.learningOutcomes.filter((_, idx) => idx !== index)
+      return { ...prev, learningOutcomes: outcomes.length ? outcomes : [''] }
+    })
+  }
+
+  // Update dynamic curriculum/module fields
+  const handleCurriculumChange = (index, value) => {
+    setCourseForm(prev => {
+      const items = [...prev.curriculum]
+      items[index] = value
+      return { ...prev, curriculum: items }
+    })
+  }
+
+  const addCurriculumField = () => {
+    setCourseForm(prev => ({
+      ...prev,
+      curriculum: [...prev.curriculum, '']
+    }))
+  }
+
+  const removeCurriculumField = (index) => {
+    setCourseForm(prev => {
+      const items = prev.curriculum.filter((_, idx) => idx !== index)
+      return { ...prev, curriculum: items.length ? items : [''] }
+    })
+  }
 
   if (isLoading && users.length === 0) return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>
 
@@ -192,6 +381,7 @@ function AdminDashboard() {
           <h1 className="text-4xl font-extrabold tracking-tight dark:text-white">Admin Hub</h1>
           <div className="mt-8 flex flex-wrap gap-2">
             {[
+              { id: 'courses', icon: BookOpen, label: 'Manage Courses' },
               { id: 'classes', icon: Video, label: 'Live Classes' },
               { id: 'reports', icon: GraduationCap, label: 'Enrollments' },
               { id: 'single', icon: User, label: 'Single Cert', superOnly: true },
@@ -208,6 +398,332 @@ function AdminDashboard() {
 
         {status.message && <div className={`mb-8 p-5 rounded-2xl border flex items-center gap-4 ${status.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'}`}><CheckCircle2 size={22} /><p className="font-semibold">{status.message}</p></div>}
 
+        {/* Course Builder Mode */}
+        {mode === 'courses' && (
+          <div className="space-y-8 animate-in fade-in zoom-in-95">
+            {!isEditingCourse ? (
+              <div className="surface-card">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold dark:text-white">Courses & Modules Manager</h2>
+                    <p className="text-xs text-ink/40 dark:text-gray-400 mt-1">Add or update course content and student modules</p>
+                  </div>
+                  <button 
+                    onClick={handleAddCourseClick}
+                    className="btn-primary inline-flex items-center gap-2 shadow-md shadow-primary/10"
+                  >
+                    <Plus size={16} /> Add New Course
+                  </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b dark:border-gray-800 text-ink/40 uppercase tracking-widest text-[10px]">
+                        <th className="pb-3 px-2">Course Name</th>
+                        <th className="pb-3 px-2">Instructor</th>
+                        <th className="pb-3 px-2">Duration</th>
+                        <th className="pb-3 px-2">Category</th>
+                        <th className="pb-3 px-2">Modules</th>
+                        <th className="pb-3 px-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y dark:divide-gray-800">
+                      {allCourses.map(c => {
+                        const moduleCount = (c.learningOutcomes?.length || 0) + (c.curriculum?.length || 0)
+                        return (
+                          <tr key={c.slug} className="group hover:bg-slate-50 transition-colors dark:hover:bg-gray-800/50">
+                            <td className="py-4 px-2 font-bold dark:text-gray-200">{c.title}</td>
+                            <td className="py-4 px-2 text-ink/65">{c.instructor}</td>
+                            <td className="py-4 px-2 text-ink/65">{c.duration}</td>
+                            <td className="py-4 px-2">
+                              <span className="bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 px-2.5 py-1 rounded text-[10px] font-bold">
+                                {c.category}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-ink/65">{moduleCount} items</td>
+                            <td className="py-4 px-2 text-right">
+                              <button 
+                                onClick={() => handleEditCourseClick(c)}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:text-accent dark:text-sky-400 dark:hover:text-sky-300 transition-colors bg-sky-50 dark:bg-sky-950/40 px-3 py-1.5 rounded-lg"
+                              >
+                                Edit Course
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="surface-card">
+                <div className="flex justify-between items-center mb-6 border-b pb-4 dark:border-gray-800">
+                  <h2 className="text-xl font-bold dark:text-white">
+                    {editingCourseSlug ? `Edit Course: ${courseForm.title}` : 'Add New Course'}
+                  </h2>
+                  <button 
+                    onClick={() => { setIsEditingCourse(false); setEditingCourseSlug(null); }}
+                    className="text-sm font-bold text-ink/40 hover:text-ink/60 dark:text-gray-500 dark:hover:text-gray-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveCourse} className="space-y-6">
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Course Title</label>
+                      <input 
+                        type="text" 
+                        name="title"
+                        value={courseForm.title} 
+                        onChange={(e) => {
+                          const title = e.target.value
+                          setCourseForm(prev => ({
+                            ...prev,
+                            title,
+                            slug: editingCourseSlug ? prev.slug : title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                          }))
+                        }}
+                        className="input-clean" 
+                        placeholder="e.g. AI Foundation" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Course Slug</label>
+                      <input 
+                        type="text" 
+                        name="slug"
+                        value={courseForm.slug} 
+                        onChange={handleCourseFormChange}
+                        disabled={editingCourseSlug !== null}
+                        className="input-clean disabled:bg-slate-100 disabled:cursor-not-allowed dark:disabled:bg-gray-800" 
+                        placeholder="e.g. ai-foundation" 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Instructor Name</label>
+                      <input 
+                        type="text" 
+                        name="instructor"
+                        value={courseForm.instructor} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean" 
+                        placeholder="e.g. N Anvesh Raju" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Duration</label>
+                      <input 
+                        type="text" 
+                        name="duration"
+                        value={courseForm.duration} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean" 
+                        placeholder="e.g. 45 days" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Estimated Hours</label>
+                      <input 
+                        type="number" 
+                        name="estimatedHours"
+                        value={courseForm.estimatedHours} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean" 
+                        placeholder="e.g. 45" 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Category</label>
+                      <select 
+                        name="category"
+                        value={courseForm.category} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean"
+                        required
+                      >
+                        <option value="AI">AI</option>
+                        <option value="VLSI">VLSI</option>
+                        <option value="Security">Security</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Difficulty</label>
+                      <select 
+                        name="difficulty"
+                        value={courseForm.difficulty} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean"
+                        required
+                      >
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Price Details</label>
+                      <input 
+                        type="text" 
+                        name="price"
+                        value={courseForm.price} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean" 
+                        placeholder="e.g. Contact for details" 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Image Path / URL</label>
+                      <input 
+                        type="text" 
+                        name="image"
+                        value={courseForm.image} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean" 
+                        placeholder="e.g. /ai-foundation.jpg" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Certificate Name</label>
+                      <input 
+                        type="text" 
+                        name="certificateName"
+                        value={courseForm.certificateName} 
+                        onChange={handleCourseFormChange}
+                        className="input-clean" 
+                        placeholder="e.g. AI Foundation Completion Certificate" 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink/50 dark:text-gray-400">Course Description</label>
+                    <textarea 
+                      name="description"
+                      value={courseForm.description} 
+                      onChange={handleCourseFormChange}
+                      rows="3"
+                      className="input-clean resize-none" 
+                      placeholder="Enter course summary..." 
+                      required 
+                    />
+                  </div>
+
+                  {/* Modules - Learning Outcomes */}
+                  <div className="border-t dark:border-gray-800 pt-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-ink/70 dark:text-gray-300">Learning Outcomes</h3>
+                      <button 
+                        type="button" 
+                        onClick={addOutcomeField}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:text-accent"
+                      >
+                        <Plus size={14} /> Add Outcome
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {courseForm.learningOutcomes.map((outcome, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <input 
+                            type="text"
+                            value={outcome}
+                            onChange={(e) => handleOutcomeChange(idx, e.target.value)}
+                            className="input-clean flex-1"
+                            placeholder="Describe what the student will learn..."
+                            required
+                          />
+                          {courseForm.learningOutcomes.length > 1 && (
+                            <button 
+                              type="button" 
+                              onClick={() => removeOutcomeField(idx)}
+                              className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Modules - Curriculum / Lessons */}
+                  <div className="border-t dark:border-gray-800 pt-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-ink/70 dark:text-gray-300">Curriculum / Modules List</h3>
+                      <button 
+                        type="button" 
+                        onClick={addCurriculumField}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:text-accent"
+                      >
+                        <Plus size={14} /> Add Module
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {courseForm.curriculum.map((item, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <input 
+                            type="text"
+                            value={item}
+                            onChange={(e) => handleCurriculumChange(idx, e.target.value)}
+                            className="input-clean flex-1"
+                            placeholder="Describe a module, topic or milestone..."
+                            required
+                          />
+                          {courseForm.curriculum.length > 1 && (
+                            <button 
+                              type="button" 
+                              onClick={() => removeCurriculumField(idx)}
+                              className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-6 border-t dark:border-gray-800">
+                    <button 
+                      type="button" 
+                      onClick={() => { setIsEditingCourse(false); setEditingCourseSlug(null); }}
+                      className="btn-secondary flex-1 py-4 font-bold"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      className="btn-primary flex-1 py-4 font-bold shadow-xl shadow-primary/20"
+                    >
+                      Save Course & Modules
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Classes Mode */}
         {mode === 'classes' && (
           <div className="grid gap-8 lg:grid-cols-2">
@@ -215,7 +731,7 @@ function AdminDashboard() {
               <h2 className="mb-6 text-xl font-bold dark:text-white">Create Class</h2>
               <form onSubmit={handleLiveClassSubmit} className="space-y-4">
                  <select className="input-clean" value={liveClassForm.courseSlug} onChange={e => selectCourseForClasses(e.target.value)} required>
-                   <option value="">-- Course --</option>{courses.map(c => <option key={c.slug} value={c.slug}>{c.title}</option>)}
+                   <option value="">-- Course --</option>{allCourses.map(c => <option key={c.slug} value={c.slug}>{c.title}</option>)}
                  </select>
                  <input type="text" placeholder="Title" className="input-clean" value={liveClassForm.title} onChange={e => setLiveClassForm(p => ({ ...p, title: e.target.value }))} required />
                  <input type="text" placeholder="Description" className="input-clean" value={liveClassForm.description} onChange={e => setLiveClassForm(p => ({ ...p, description: e.target.value }))} required />
@@ -321,7 +837,7 @@ function AdminDashboard() {
                 <label className="text-xs font-bold uppercase text-primary mb-2 block">Course Enrollment Data</label>
                 <select className="input-clean" value={reportingCourseSlug} onChange={e => handleLoadReports(e.target.value)}>
                    <option value="">-- Choose Course to see Enrolled Students --</option>
-                   {courses.map(c => <option key={c.slug} value={c.slug}>{c.title}</option>)}
+                   {allCourses.map(c => <option key={c.slug} value={c.slug}>{c.title}</option>)}
                 </select>
              </div>
              
@@ -374,7 +890,7 @@ function AdminDashboard() {
               </div>
               <div className="surface-card space-y-4">
                  <select name="courseSlug" value={formData.courseSlug} onChange={handleInputChange} className="input-clean" required>
-                    <option value="">-- Choose Course --</option>{courses.map(c => <option key={c.slug} value={c.slug}>{c.title}</option>)}
+                    <option value="">-- Choose Course --</option>{allCourses.map(c => <option key={c.slug} value={c.slug}>{c.title}</option>)}
                  </select>
                  <div className="grid grid-cols-2 gap-4">
                     <input type="text" name="startingDate" placeholder="Start Date" value={formData.startingDate} onChange={handleInputChange} className="input-clean" required />
