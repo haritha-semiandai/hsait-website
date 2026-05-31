@@ -104,7 +104,7 @@ function SignIn() {
           <p className="section-kicker">Account</p>
           <h1 className="mt-4 text-3xl font-semibold dark:text-gray-100">{heading}</h1>
           <p className="mt-3 text-ink/70 dark:text-gray-300">
-            Secure access powered by Firebase Authentication.
+            Secure access to your learning portal.
           </p>
 
           <div className="mt-8 grid grid-cols-2 rounded-xl border border-slate-200 p-1 dark:border-gray-700">
