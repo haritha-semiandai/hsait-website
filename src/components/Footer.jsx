@@ -85,7 +85,18 @@ function Footer() {
       </div>
 
       <div className="section-shell mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-6 text-sm text-ink/60 dark:border-gray-700 dark:text-gray-500">
-        <p>Copyright {new Date().getFullYear()}. All rights reserved.</p>
+        <p>
+          Copyright {new Date().getFullYear()}. All rights reserved. | by{' '}
+          <a
+            href="https://rsmk.co.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative inline-block font-display font-bold tracking-wider bg-gradient-to-r from-accent via-primary to-highlight bg-clip-text text-transparent hover:brightness-110 transition-all duration-300 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(14,165,233,0.6)] group"
+          >
+            RSMK
+            <span className="absolute -bottom-0.5 left-0 w-full h-[1.5px] bg-gradient-to-r from-accent via-primary to-highlight transform scale-x-0 transition-transform duration-300 origin-left group-hover:scale-x-100" />
+          </a>
+        </p>
         <div className="flex items-center gap-4">
           <Link to="/privacy" className="hover:text-primary dark:hover:text-sky-400">Privacy</Link>
           <Link to="/terms" className="hover:text-primary dark:hover:text-sky-400">Terms</Link>
